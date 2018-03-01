@@ -1,5 +1,6 @@
 package io.github.hsyyid.inspector.cmdexecutors;
 
+import io.github.hsyyid.inspector.PluginInfo;
 import org.spongepowered.api.Sponge;
 import org.spongepowered.api.command.CommandException;
 import org.spongepowered.api.command.CommandResult;
@@ -15,7 +16,8 @@ public class InspectorExecutor implements CommandExecutor {
 	}
 
 	public CommandResult execute(CommandSource src, CommandContext ctx) throws CommandException {
-		src.sendMessage(Text.of(new Object[]{TextColors.BLUE, "[Inspector]: ", TextColors.GRAY, "Version: ", TextColors.GOLD, ((PluginContainer)Sponge.getPluginManager().getPlugin("io.github.hsyyid.inspector").get()).getVersion()}));
+		src.sendMessage(Text.of(TextColors.BLUE, "[Inspector]: ", TextColors.GRAY, "Version: ", TextColors.GOLD, PluginInfo.VERSION));
+		src.sendMessage(Text.of(TextColors.BLUE, "[Inspector]: ", TextColors.RED, "Warnning: ", TextColors.GOLD, PluginInfo.WARNING));
 		return CommandResult.success();
 	}
 }

@@ -21,7 +21,7 @@ public class Utils {
 		for(int i = index; i < results.size(); ++i) {
 			BlockInformation blockInfo = (BlockInformation)results.get(i);
 			if (blockInfo.getLocation().getBlock() != blockInfo.getOldBlockSnapshot().getState()) {
-				blockInfo.getLocation().setBlock(blockInfo.getOldBlockSnapshot().getState(), Cause.of(NamedCause.source(Inspector.instance().getPluginContainer())));
+				blockInfo.getLocation().setBlock(blockInfo.getOldBlockSnapshot().getState(),Cause.of(NamedCause.source(Inspector.instance().getPluginContainer())));
 			}
 		}
 
