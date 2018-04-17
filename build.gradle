@@ -4,7 +4,7 @@ apply plugin: 'eclipse'
 sourceCompatibility = 1.8
 targetCompatibility = 1.8
 version = '0.6.7-UnofficialThread-1.12.2'
-group = "io.github.hsyyid"
+group = "io.github.Tollainmear"
 archivesBaseName = "Inspector"
 
 jar {
@@ -39,5 +39,10 @@ uploadArchives {
        flatDir {
            dirs 'repos'
        }
+    }
+}
+sourceSets{
+    main{
+        resources.srcDir 'resources/'
     }
 }

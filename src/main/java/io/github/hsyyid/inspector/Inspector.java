@@ -2,20 +2,21 @@ package io.github.hsyyid.inspector;
 
 import java.io.File;
 import java.io.IOException;
+import java.nio.file.Path;
 import java.util.*;
 import java.util.stream.Collectors;
+
+import io.github.Tollainmear.translator.Translator;
 
 import io.github.hsyyid.inspector.cmdexecutors.*;
 import org.slf4j.Logger;
 import org.spongepowered.api.Sponge;
-import org.spongepowered.api.block.BlockTypes;
 import org.spongepowered.api.command.args.GenericArguments;
 import org.spongepowered.api.command.spec.CommandSpec;
+import org.spongepowered.api.config.ConfigDir;
 import org.spongepowered.api.config.DefaultConfig;
 import org.spongepowered.api.event.Listener;
-import org.spongepowered.api.event.game.state.GameInitializationEvent;
 import org.spongepowered.api.event.game.state.GameStartedServerEvent;
-import org.spongepowered.api.event.game.state.GameStartingServerEvent;
 import org.spongepowered.api.event.game.state.GameStoppingServerEvent;
 import org.spongepowered.api.plugin.Dependency;
 import org.spongepowered.api.plugin.Plugin;
@@ -43,9 +44,8 @@ import org.spongepowered.api.world.World;
 public class Inspector
 {
 	private DatabaseManager databaseManager;
-
+	private Translator translator;
 	private static Inspector instance;
-
 	public static CommentedConfigurationNode config;
 	public static ConfigurationLoader<CommentedConfigurationNode> configurationManager;
 	public static Set<UUID> inspectorEnabledPlayers = Sets.newHashSet();
@@ -80,11 +80,15 @@ public class Inspector
 	}
 
 	@Inject
-	@DefaultConfig(sharedRoot = true)
+	@DefaultConfig(sharedRoot = false)
 	private File dConfig;
 
 	@Inject
-	@DefaultConfig(sharedRoot = true)
+	@ConfigDir(sharedRoot = false)
+	private Path configPath;
+
+	@Inject
+	@DefaultConfig(sharedRoot = false)
 	private ConfigurationLoader<CommentedConfigurationNode> confManager;
 
 	@Listener
@@ -94,15 +98,21 @@ public class Inspector
 		instance = this;
 		this.databaseManager = new DatabaseManager();
 
-		try
-		{
-            loadConfig();
+		try {
+			loadConfig();
+		} catch (IOException e) {
+			e.printStackTrace();
+		}
 
-		}
-		catch (IOException exception)
-		{
-			getLogger().error("The default configuration could not be loaded or created!");
-		}
+//		try
+//		{
+//
+//
+//		}
+//		catch (IOException exception)
+//		{
+//			getLogger().error("The default configuration could not be loaded or created!");
+//		}
 
 		HashMap<List<String>, CommandSpec> inspectorSubcommands = new HashMap<List<String>, CommandSpec>();
 
@@ -184,11 +194,13 @@ public class Inspector
 				config.getNode("worlds").getNode(ite.next().getName()).setValue(false);
 			}
 			config.getNode("blockWhiteList").setValue("");
+			config.getNode("language").setValue("zh_CN");
 			confManager.save(config);
 		}
 		configurationManager = confManager;
 		config = confManager.load();
-		config.getNode("-Announcement").setValue("The inspector you using now was NOT from the Official Thread!\nPost any issues you found to mcbbs(http://mcbbs.tvt.im/forum.php?mod=redirect&goto=findpost&ptid=660997&pid=12750382)");
+		translator = new Translator(this);
+		config.getNode("-Announcement").setValue("The inspector you using now was NOT from the Official Thread! Post any issues you found to mcbbs(http://mcbbs.tvt.im/forum.php?mod=redirect&goto=findpost&ptid=660997&pid=12750382)");
 		if (config.getNode("blockWhiteList").isVirtual()) {
 			blockWhiteList.add("minecraft:bedrock");
 			config.getNode("blockWhiteList").setValue(blockWhiteList).setComment("Attention: the block type here should be specified the unsafeDamage,it means that if you want add Stone here, you should put \"minecraft:stone:0\" instead of\"minecraft:stone\"!");
@@ -209,5 +221,17 @@ public class Inspector
 
 	public Set<String> getBlockWhiteList() {
 		return blockWhiteList;
+	}
+
+	public static CommentedConfigurationNode getConfigNode() {
+		return config;
+	}
+
+	public Path getConfigPath() {
+		return configPath;
+	}
+
+	public ConfigurationLoader<CommentedConfigurationNode> getConfigLoader() {
+		return confManager;
 	}
 }
