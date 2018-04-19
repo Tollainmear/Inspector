@@ -22,6 +22,8 @@ import java.util.TimeZone;
 import java.util.UUID;
 import java.util.Map.Entry;
 import javax.sql.DataSource;
+
+import org.slf4j.Logger;
 import org.spongepowered.api.Sponge;
 import org.spongepowered.api.block.BlockSnapshot;
 import org.spongepowered.api.data.DataContainer;
@@ -33,8 +35,13 @@ import org.spongepowered.api.world.Location;
 import org.spongepowered.api.world.World;
 
 public class DatabaseManager {
+	private final Logger LOG = Inspector.instance().getLogger();
 	private Gson gson = (new GsonBuilder()).create();
 	private Connection connection;
+	private boolean mysql;
+
+	private static final String CREATE_PLAYER_TABLE_MYSQL = "CREATE TABLE IF NOT EXISTS `PLAYERS`(`ID` INTEGER PRIMARY KEY AUTO_INCREMENT NOT NULL, `UUID` TEXT NOT NULL, `NAME` TEXT NOT NULL)";
+	private static final String CREATE_PLAYER_TABLE_SQLITE = "CREATE TABLE IF NOT EXISTS `PLAYERS`(`ID` INTEGER PRIMARY KEY NOT NULL, `UUID` TEXT NOT NULL, `NAME` TEXT NOT NULL)";
 
 	public DatabaseManager() {
 	}
@@ -42,7 +49,7 @@ public class DatabaseManager {
 	private Connection getDatabaseConnection() throws SQLException {
 		if (this.connection == null) {
 			if ((Boolean)Utils.getConfigValue("database.mysql.enabled")) {
-				SqlService sql = (SqlService)Sponge.getServiceManager().provide(SqlService.class).get();
+				SqlService sql = Sponge.getServiceManager().provide(SqlService.class).get();
 				String host = (String)Utils.getConfigValue("database.mysql.host");
 				String port = (String)Utils.getConfigValue("database.mysql.port");
 				String username = (String)Utils.getConfigValue("database.mysql.username");
@@ -50,11 +57,15 @@ public class DatabaseManager {
 				String database = (String)Utils.getConfigValue("database.mysql.database");
 				DataSource datasource = sql.getDataSource("jdbc:mysql://" + host + ":" + port + "/" + database + "?user=" + username + "&password=" + password);
 				this.connection = datasource.getConnection();
+				mysql = true;
+				LOG.info("Inspector is using Mysql/MariaDB database");
 			} else {
 				try {
 					Class.forName("org.sqlite.JDBC");
+					mysql = false;
+					LOG.info("Inspector is using SQLite database");
 				} catch (ClassNotFoundException var8) {
-					System.err.println("[Inspector]: Error! You do not have any database software installed. This plugin cannot work correctly!");
+					LOG.error("Error! You do not have any database software installed. This plugin cannot work correctly!");
 				}
 
 				this.connection = DriverManager.getConnection("jdbc:sqlite:Inspector.db");
@@ -69,11 +80,11 @@ public class DatabaseManager {
 			try {
 				Connection c = this.getDatabaseConnection();
 				Statement stmt = c.createStatement();
-				String sql = "CREATE TABLE IF NOT EXISTS BLOCKINFO(LOCATION      TEXT       NOT NULL, PLAYERID      INT        NOT NULL, TIME          TEXT       NOT NULL, OLDBLOCK      TEXT       NOT NULL, NEWBLOCK      TEXT       NOT NULL)";
+				String sql = "CREATE TABLE IF NOT EXISTS BLOCKINFO(LOCATION TEXT NOT NULL, PLAYERID INT NOT NULL, TIME TEXT NOT NULL, OLDBLOCK TEXT NOT NULL, NEWBLOCK TEXT NOT NULL)";
 				stmt.executeUpdate(sql);
-				Map<?, ?> serializedBlock = (Map)oldBlockSnapshot.toContainer().getMap(DataQuery.of()).get();
+				Map<?, ?> serializedBlock = oldBlockSnapshot.toContainer().getMap(DataQuery.of()).get();
 				String oldBlock = this.gson.toJson(serializedBlock);
-				serializedBlock = (Map)newBlockSnapshot.toContainer().getMap(DataQuery.of()).get();
+				serializedBlock = newBlockSnapshot.toContainer().getMap(DataQuery.of()).get();
 				String newBlock = this.gson.toJson(serializedBlock);
 				sql = "INSERT INTO BLOCKINFO (LOCATION,PLAYERID,TIME,OLDBLOCK,NEWBLOCK) VALUES ('" + x + ";" + y + ";" + z + ";" + worldUUID.toString() + "'," + this.getPlayerId(playerUUID) + ",'" + time + "','" + oldBlock + "','" + newBlock + "');";
 				stmt.executeUpdate(sql);
@@ -106,7 +117,7 @@ public class DatabaseManager {
 		try {
 			Connection c = this.getDatabaseConnection();
 			Statement stmt = c.createStatement();
-			stmt.executeUpdate("CREATE TABLE IF NOT EXISTS `PLAYERS`(`ID` INTEGER PRIMARY KEY AUTO_INCREMENT NOT NULL, `UUID` TEXT NOT NULL, `NAME` TEXT NOT NULL)");
+			stmt.executeUpdate(mysql ? CREATE_PLAYER_TABLE_MYSQL : CREATE_PLAYER_TABLE_SQLITE);
 			stmt.close();
 			PreparedStatement preparedStmt = c.prepareStatement("SELECT count(*) from PLAYERS WHERE uuid=?");
 			preparedStmt.setString(1, player.getUniqueId().toString());
@@ -134,7 +145,6 @@ public class DatabaseManager {
 
 			ResultSet rs;
 			for(rs = stmt.executeQuery(); rs.next(); id = rs.getInt("id")) {
-				;
 			}
 
 			rs.close();
@@ -175,7 +185,6 @@ public class DatabaseManager {
 
 			ResultSet rs;
 			for(rs = stmt.executeQuery(); rs.next(); name = rs.getString("name")) {
-				;
 			}
 
 			rs.close();
@@ -193,7 +202,7 @@ public class DatabaseManager {
 		try {
 			Connection c = this.getDatabaseConnection();
 			PreparedStatement stmt = c.prepareStatement("SELECT * FROM BLOCKINFO WHERE location=?");
-			stmt.setString(1, location.getBlockX() + ";" + location.getBlockY() + ";" + location.getBlockZ() + ";" + ((World)location.getExtent()).getUniqueId().toString());
+			stmt.setString(1, location.getBlockX() + ";" + location.getBlockY() + ";" + location.getBlockZ() + ";" + location.getExtent().getUniqueId().toString());
 			ResultSet rs = stmt.executeQuery();
 
 			while(rs.next()) {
@@ -223,7 +232,7 @@ public class DatabaseManager {
 			try {
 				Connection c = this.getDatabaseConnection();
 				PreparedStatement stmt = c.prepareStatement("SELECT * FROM BLOCKINFO WHERE location=? AND playerId=?");
-				stmt.setString(1, location.getBlockX() + ";" + location.getBlockY() + ";" + location.getBlockZ() + ";" + ((World)location.getExtent()).getUniqueId().toString());
+				stmt.setString(1, location.getBlockX() + ";" + location.getBlockY() + ";" + location.getBlockZ() + ";" + location.getExtent().getUniqueId().toString());
 				stmt.setInt(2, playerId);
 				ResultSet rs = stmt.executeQuery();
 
@@ -240,17 +249,15 @@ public class DatabaseManager {
 			}
 		}
 
-		blockInformation.sort(new Comparator<BlockInformation>() {
-			public int compare(BlockInformation o1, BlockInformation o2) {
-				SimpleDateFormat format = new SimpleDateFormat("dd MMM yyyy HH:mm:ss");
-				format.setTimeZone(TimeZone.getTimeZone("GMT"));
+		blockInformation.sort((o1, o2) -> {
+			SimpleDateFormat format = new SimpleDateFormat("dd MMM yyyy HH:mm:ss");
+			format.setTimeZone(TimeZone.getTimeZone("GMT"));
 
-				try {
-					return format.parse(o1.getTimeEdited()).compareTo(format.parse(o2.getTimeEdited()));
-				} catch (ParseException var5) {
-					var5.printStackTrace();
-					return -1;
-				}
+			try {
+				return format.parse(o1.getTimeEdited()).compareTo(format.parse(o2.getTimeEdited()));
+			} catch (ParseException var51) {
+				var51.printStackTrace();
+				return -1;
 			}
 		});
 		return blockInformation;
@@ -266,11 +273,11 @@ public class DatabaseManager {
 			container.set(DataQuery.of('.', entry.getKey().toString()), entry.getValue());
 		}
 
-		return (BlockSnapshot)BlockSnapshot.builder().build(container).get();
+		return BlockSnapshot.builder().build(container).get();
 	}
 
 	public void clearExpiredData(long timeThreshold) {
-		Inspector.instance().getLogger().info("Starting purge the expired data...");
+		LOG.info("Starting purge the expired data...");
 		Sponge.getScheduler().createTaskBuilder().async().execute(() -> {
 			try {
 				Connection c = this.getDatabaseConnection();
@@ -283,6 +290,6 @@ public class DatabaseManager {
 			}
 
 		}).submit(Inspector.instance());
-		Inspector.instance().getLogger().info("clean up!");
+		LOG.info("clean up!");
 	}
 }
