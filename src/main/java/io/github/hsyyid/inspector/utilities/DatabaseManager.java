@@ -86,6 +86,10 @@ public class DatabaseManager {
 				String oldBlock = this.gson.toJson(serializedBlock);
 				serializedBlock = newBlockSnapshot.toContainer().getMap(DataQuery.of()).get();
 				String newBlock = this.gson.toJson(serializedBlock);
+				if (mysql) {
+					oldBlock = addBackslashForMysql(oldBlock);
+					newBlock = addBackslashForMysql(newBlock);
+				}
 				sql = "INSERT INTO BLOCKINFO (LOCATION,PLAYERID,TIME,OLDBLOCK,NEWBLOCK) VALUES ('" + x + ";" + y + ";" + z + ";" + worldUUID.toString() + "'," + this.getPlayerId(playerUUID) + ",'" + time + "','" + oldBlock + "','" + newBlock + "');";
 				stmt.executeUpdate(sql);
 				stmt.close();
@@ -94,6 +98,10 @@ public class DatabaseManager {
 			}
 
 		}).submit(Inspector.instance());
+	}
+
+	private String addBackslashForMysql(String string) {
+		return string.replaceAll("\\\\","\\\\\\\\");
 	}
 
 	public void addPlayerToDatabase(Player player) {
