@@ -3,6 +3,7 @@ package io.github.hsyyid.inspector;
 import java.io.File;
 import java.io.IOException;
 import java.nio.file.Path;
+import java.sql.SQLException;
 import java.util.*;
 import java.util.stream.Collectors;
 
@@ -94,14 +95,16 @@ public class Inspector
 	@Listener
 	public void onGameInit(GameStartedServerEvent event)
 	{
-		getLogger().info("Inspector loading...");
+		logger.info("Inspector loading...");
 		instance = this;
-		this.databaseManager = new DatabaseManager();
 
 		try {
 			loadConfig();
-		} catch (IOException e) {
-			e.printStackTrace();
+			this.databaseManager = new DatabaseManager();
+		} catch (IOException ioe) {
+			logger.error("Inspector cannot load configuration.", ioe);
+		} catch (SQLException sqle) {
+			logger.error("Inspector cannot init Database correctly", sqle);
 		}
 
 //		try
@@ -111,7 +114,7 @@ public class Inspector
 //		}
 //		catch (IOException exception)
 //		{
-//			getLogger().error("The default configuration could not be loaded or created!");
+//			logger.error("The default configuration could not be loaded or created!");
 //		}
 
 		HashMap<List<String>, CommandSpec> inspectorSubcommands = new HashMap<List<String>, CommandSpec>();
@@ -157,16 +160,16 @@ public class Inspector
 		Sponge.getEventManager().registerListeners(this, new ExplosionListener());
 		Sponge.getEventManager().registerListeners(this, new PlayerJoinListener());
 
-		getLogger().info("-----------------------------");
-		getLogger().info("Inspector was created by HassanS6000!");
-        getLogger().info("This version was improved by Tollainmear!");
-		getLogger().info("Please post all errors on the Sponge Thread or on GitHub!");
-		getLogger().info("Have fun, and enjoy! :D");
-		getLogger().info("-----------------------------");
-		getLogger().info("Inspector loaded!");
-		getLogger().warn("The Inspector you using now was NOT from the Official Thread!");
-		getLogger().warn("Post any issues you found to mcbbs(http://mcbbs.tvt.im/forum.php?mod=redirect&goto=findpost&ptid=660997&pid=12750382)");
-		getLogger().warn("Thank for using Inspector Unofficial Thread Improved by Tollainmear!");
+		logger.info("-----------------------------");
+		logger.info("Inspector was created by HassanS6000!");
+        logger.info("This version was improved by Tollainmear!");
+		logger.info("Please post all errors on the Sponge Thread or on GitHub!");
+		logger.info("Have fun, and enjoy! :D");
+		logger.info("-----------------------------");
+		logger.info("Inspector loaded!");
+		logger.warn("The Inspector you using now was NOT from the Official Thread!");
+		logger.warn("Post any issues you found to mcbbs(http://mcbbs.tvt.im/forum.php?mod=redirect&goto=findpost&ptid=660997&pid=12750382)");
+		logger.warn("Thank for using Inspector Unofficial Thread Improved by Tollainmear!");
 	}
 
 	@Listener
