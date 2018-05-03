@@ -28,7 +28,7 @@ public class DatabaseManager {
     private final Logger LOG = Inspector.instance().getLogger();
     private final Connection connection;
     private final Gson gson = (new GsonBuilder()).create();
-    private boolean mysql;
+    private boolean mysql, init;
 
     public DatabaseManager() throws SQLException {
         if ((Boolean) Utils.getConfigValue("database.mysql.enabled")) {
@@ -48,19 +48,42 @@ public class DatabaseManager {
                 mysql = false;
                 LOG.info("Inspector is using SQLite database");
             } catch (ClassNotFoundException var8) {
-                LOG.error("Error! You do not have any database software installed. This plugin cannot work correctly!");
+                LOG.error("Cannot init SQLite driver.", var8);
             }
 
             this.connection = DriverManager.getConnection("jdbc:sqlite:Inspector.db");
         }
+        if (connection != null && initDatabase()) {
+            init = true;
+            LOG.info("Inspector is ready");
+        } else {
+            init = false;
+            LOG.error("Cannot init data source for Inspector. This plugin will NOT do anything.");
+        }
+    }
+
+    private boolean initDatabase() {
+        try {
+            LOG.debug("Init player table");
+            Statement stmt = connection.createStatement();
+            stmt.executeUpdate(mysql ? CREATE_PLAYER_TABLE_MYSQL : CREATE_PLAYER_TABLE_SQLITE);
+            stmt.close();
+
+            LOG.debug("Init block table");
+            stmt = connection.createStatement();
+            stmt.executeUpdate("CREATE TABLE IF NOT EXISTS BLOCKINFO(LOCATION TEXT NOT NULL, PLAYERID INT NOT NULL, TIME TEXT NOT NULL, OLDBLOCK TEXT NOT NULL, NEWBLOCK TEXT NOT NULL)");
+            stmt.close();
+        } catch (Exception e) {
+            LOG.error("Cannot init database.", e);
+            return false;
+        }
+        return true;
     }
 
     public void updateBlockInformation(int x, int y, int z, UUID worldUUID, UUID playerUUID, String playerName, String time, BlockSnapshot oldBlockSnapshot, BlockSnapshot newBlockSnapshot) {
+        if (!init) return;
         Sponge.getScheduler().createTaskBuilder().async().execute(() -> {
             try {
-                Statement stmt = Objects.requireNonNull(connection).createStatement();
-                String sql = "CREATE TABLE IF NOT EXISTS BLOCKINFO(LOCATION TEXT NOT NULL, PLAYERID INT NOT NULL, TIME TEXT NOT NULL, OLDBLOCK TEXT NOT NULL, NEWBLOCK TEXT NOT NULL)";
-                stmt.executeUpdate(sql);
                 Map<?, ?> serializedBlock = oldBlockSnapshot.toContainer().getMap(DataQuery.of()).get();
                 String oldBlock = gson.toJson(serializedBlock);
                 serializedBlock = newBlockSnapshot.toContainer().getMap(DataQuery.of()).get();
@@ -69,7 +92,8 @@ public class DatabaseManager {
                     oldBlock = addBackslashForMysql(oldBlock);
                     newBlock = addBackslashForMysql(newBlock);
                 }
-                sql = "INSERT INTO BLOCKINFO (LOCATION,PLAYERID,TIME,OLDBLOCK,NEWBLOCK) VALUES ('" + x + ";" + y + ";" + z + ";" + worldUUID.toString() + "'," + this.getPlayerId(playerUUID) + ",'" + time + "','" + oldBlock + "','" + newBlock + "');";
+                Statement stmt = connection.createStatement();
+                String sql = "INSERT INTO BLOCKINFO (LOCATION,PLAYERID,TIME,OLDBLOCK,NEWBLOCK) VALUES ('" + x + ";" + y + ";" + z + ";" + worldUUID.toString() + "'," + this.getPlayerId(playerUUID) + ",'" + time + "','" + oldBlock + "','" + newBlock + "');";
                 stmt.executeUpdate(sql);
                 stmt.close();
             } catch (SQLException var15) {
@@ -84,6 +108,7 @@ public class DatabaseManager {
     }
 
     public void addPlayerToDatabase(Player player) {
+        if (!init) return;
         Sponge.getScheduler().createTaskBuilder().async().execute(() -> {
             try {
                 Statement stmt = connection.createStatement();
@@ -98,12 +123,11 @@ public class DatabaseManager {
     }
 
     public boolean isPlayerInDatabase(Player player) {
+        if (!init) return false;
+
         boolean isInDatabase = false;
 
         try {
-            Statement stmt = connection.createStatement();
-            stmt.executeUpdate(mysql ? CREATE_PLAYER_TABLE_MYSQL : CREATE_PLAYER_TABLE_SQLITE);
-            stmt.close();
             PreparedStatement preparedStmt = connection.prepareStatement("SELECT count(*) from PLAYERS WHERE uuid=?");
             preparedStmt.setString(1, player.getUniqueId().toString());
             ResultSet rs = preparedStmt.executeQuery();
@@ -121,6 +145,8 @@ public class DatabaseManager {
     }
 
     private int getPlayerId(UUID uniqueId) {
+        if (!init) return -1;
+
         int id = -1;
 
         try {
@@ -141,6 +167,8 @@ public class DatabaseManager {
     }
 
     private UUID getPlayerUniqueId(int id) {
+        if (!init) return null;
+
         try {
             PreparedStatement stmt = connection.prepareStatement("SELECT * FROM PLAYERS WHERE id=?");
             stmt.setInt(1, id);
@@ -159,6 +187,7 @@ public class DatabaseManager {
     }
 
     private String getPlayerName(int id) {
+        if (!init) return null;
         String name = "";
 
         try {
@@ -179,6 +208,8 @@ public class DatabaseManager {
     }
 
     public List<BlockInformation> getBlockInformationAt(Location<World> location) {
+        if (!init) return null;
+
         ArrayList blockInformation = Lists.newArrayList();
 
         try {
@@ -203,6 +234,8 @@ public class DatabaseManager {
     }
 
     public List<BlockInformation> getBlockInformationAt(Set<Location<World>> locations, UUID playerUniqueId) {
+        if (!init) return null;
+
         List<BlockInformation> blockInformation = Lists.newArrayList();
         int playerId = this.getPlayerId(playerUniqueId);
         Iterator var5 = locations.iterator();
@@ -257,6 +290,8 @@ public class DatabaseManager {
     }
 
     public void clearExpiredData(long timeThreshold) {
+        if (!init) return;
+
         LOG.info("Starting purge the expired data...");
         Sponge.getScheduler().createTaskBuilder().async().execute(() -> {
             try {
